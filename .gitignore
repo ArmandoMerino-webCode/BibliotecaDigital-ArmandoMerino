@@ -6,3 +6,4 @@ TestResults/
 *.user
 *.suo
 .coverage
+# Configuración para ignorar archivos generados y temporales
