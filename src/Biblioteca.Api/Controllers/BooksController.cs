@@ -36,6 +36,6 @@ public sealed class BooksController(LibraryService service) : ControllerBase
         if (!service.DeleteBook(id))
             return Conflict(new { message = "No se puede eliminar un libro con préstamos activos." });
 
-        return NoContent(
+        return NoContent();
     }
 }
