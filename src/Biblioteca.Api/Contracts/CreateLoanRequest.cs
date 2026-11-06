@@ -5,11 +5,11 @@ namespace Biblioteca.Api.Contracts;
 public sealed class CreateLoanRequest
 {
     [Range(1, int.MaxValue)]
-    public int BookId { get; init; }
+    public required int BookId { get; init; }
 
     [Required, StringLength(100, MinimumLength = 2)]
     public string Borrower { get; init; } = "";
 
-    public DateOnly LoanDate { get; init; }
-    public DateOnly DueDate { get; init; }
+    public required DateOnly LoanDate { get; init; }
+    public required DateOnly DueDate { get; init; }
 }
