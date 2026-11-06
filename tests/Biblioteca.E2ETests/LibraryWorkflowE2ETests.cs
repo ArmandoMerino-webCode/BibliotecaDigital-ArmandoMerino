@@ -67,4 +67,106 @@ public class LibraryWorkflowE2ETests
 
     private sealed record BookDto(int Id, string Title, string Author, string Isbn, int PublishedYear, int AvailableCopies);
     private sealed record LoanDto(int Id, int BookId, string Borrower, DateOnly LoanDate, DateOnly DueDate, DateOnly? ReturnDate, string Status);
+
+    [Fact]
+    public async Task LoanLifecycle_PreventsDeletingBookUntilLoanIsReturned()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+
+        var bookRequest = new CreateBookRequest
+        {
+            Title = $"Libro préstamo E2E {suffix}",
+            Author = "Autor de pruebas",
+            Isbn = $"978{Random.Shared.Next(1000000000, 1999999999)}",
+            PublishedYear = 2022,
+            AvailableCopies = 1
+        };
+
+        var createBook = await _client.PostAsJsonAsync("/api/books", bookRequest);
+        Assert.Equal(HttpStatusCode.Created, createBook.StatusCode);
+
+        var book = await createBook.Content.ReadFromJsonAsync<BookDto>();
+        Assert.NotNull(book);
+
+        var loanRequest = new CreateLoanRequest
+        {
+            BookId = book.Id,
+            Borrower = $"E2E {suffix}",
+            LoanDate = DateOnly.FromDateTime(DateTime.Today),
+            DueDate = DateOnly.FromDateTime(DateTime.Today.AddDays(14))
+        };
+
+        var createLoan = await _client.PostAsJsonAsync("/api/loans", loanRequest);
+        Assert.Equal(HttpStatusCode.Created, createLoan.StatusCode);
+
+        var deleteWhileActive = await _client.DeleteAsync($"/api/books/{book.Id}");
+        Assert.Equal(HttpStatusCode.Conflict, deleteWhileActive.StatusCode);
+
+        var loan = await createLoan.Content.ReadFromJsonAsync<LoanDto>();
+        Assert.NotNull(loan);
+
+        var returnLoan = await _client.PutAsync($"/api/loans/{loan.Id}/return", null);
+        Assert.Equal(HttpStatusCode.OK, returnLoan.StatusCode);
+
+        var deleteAfterReturn = await _client.DeleteAsync($"/api/books/{book.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteAfterReturn.StatusCode);
+
+        var getAfterDelete = await _client.GetAsync($"/api/books/{book.Id}");
+        Assert.Equal(HttpStatusCode.NotFound, getAfterDelete.StatusCode);
+    }
+
+
+    [Fact]
+    public async Task LoanLifecycle_UpdatesAvailableCopiesAfterLoanAndReturn()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+
+        var bookRequest = new CreateBookRequest
+        {
+            Title = $"Libro copias E2E {suffix}",
+            Author = "Autor de pruebas",
+            Isbn = $"978{Random.Shared.Next(1000000000, 1999999999)}",
+            PublishedYear = 2022,
+            AvailableCopies = 2
+        };
+
+        var createBook = await _client.PostAsJsonAsync("/api/books", bookRequest);
+        Assert.Equal(HttpStatusCode.Created, createBook.StatusCode);
+
+        var book = await createBook.Content.ReadFromJsonAsync<BookDto>();
+        Assert.NotNull(book);
+        Assert.Equal(2, book.AvailableCopies);
+
+        var loanRequest = new CreateLoanRequest
+        {
+            BookId = book.Id,
+            Borrower = $"E2E {suffix}",
+            LoanDate = DateOnly.FromDateTime(DateTime.Today),
+            DueDate = DateOnly.FromDateTime(DateTime.Today.AddDays(14))
+        };
+
+        var createLoan = await _client.PostAsJsonAsync("/api/loans", loanRequest);
+        Assert.Equal(HttpStatusCode.Created, createLoan.StatusCode);
+
+        var bookAfterLoanResponse = await _client.GetAsync($"/api/books/{book.Id}");
+        var bookAfterLoan = await bookAfterLoanResponse.Content.ReadFromJsonAsync<BookDto>();
+
+        Assert.Equal(HttpStatusCode.OK, bookAfterLoanResponse.StatusCode);
+        Assert.NotNull(bookAfterLoan);
+        Assert.Equal(1, bookAfterLoan.AvailableCopies);
+
+        var loan = await createLoan.Content.ReadFromJsonAsync<LoanDto>();
+        Assert.NotNull(loan);
+
+        var returnLoan = await _client.PutAsync($"/api/loans/{loan.Id}/return", null);
+        Assert.Equal(HttpStatusCode.OK, returnLoan.StatusCode);
+
+        var bookAfterReturnResponse = await _client.GetAsync($"/api/books/{book.Id}");
+        var bookAfterReturn = await bookAfterReturnResponse.Content.ReadFromJsonAsync<BookDto>();
+
+        Assert.Equal(HttpStatusCode.OK, bookAfterReturnResponse.StatusCode);
+        Assert.NotNull(bookAfterReturn);
+        Assert.Equal(2, bookAfterReturn.AvailableCopies);
+    }
+
 }

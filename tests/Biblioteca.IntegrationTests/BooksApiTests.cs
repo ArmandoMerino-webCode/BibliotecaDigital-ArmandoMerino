@@ -56,4 +56,26 @@ public class BooksApiTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     private sealed record BookResponse(int Id, string Title, string Author, string Isbn, int PublishedYear, int AvailableCopies);
+
+
+    [Fact]
+    public async Task DeleteBook_WithActiveLoan_ReturnsConflict()
+    {
+        var request = new CreateLoanRequest
+        {
+            BookId = 1,
+            Borrower = "Armando",
+            LoanDate = new DateOnly(2026, 11, 6),
+            DueDate = new DateOnly(2026, 11, 17)
+        };
+
+        var loanResponse = await _client.PostAsJsonAsync("/api/loans", request);
+        Assert.Equal(HttpStatusCode.Created, loanResponse.StatusCode);
+
+        var deleteResponse = await _client.DeleteAsync("/api/books/1");
+
+        Assert.Equal(HttpStatusCode.Conflict, deleteResponse.StatusCode);
+    }
+
+
 }
