@@ -93,4 +93,57 @@ public class LibraryServiceTests
         Assert.Null(result.Loan);
         Assert.Contains("posterior", result.Error);
     }
+
+
+
+    [Fact]
+    public void CreateLoan_WhenBookDoesNotExist_ReturnsError()
+    {
+        _books.Setup(x => x.GetById(99)).Returns((Book?)null);
+
+        var result = CreateService().CreateLoan(new CreateLoanRequest
+        {
+            BookId = 99,
+            Borrower = "Ana López",
+            LoanDate = new DateOnly(2026, 11, 3),
+            DueDate = new DateOnly(2026, 11, 10)
+        });
+
+        Assert.Null(result.Loan);
+        Assert.Contains("No existe el libro", result.Error);
+        _loans.Verify(x => x.Add(It.IsAny<Loan>()), Times.Never);
+    }
+
+
+    [Fact]
+    public void ReturnLoan_WhenLoanDoesNotExist_ReturnsError()
+    {
+        _loans.Setup(x => x.GetById(99)).Returns((Loan?)null);
+
+        var result = CreateService().ReturnLoan(99);
+
+        Assert.Null(result.Loan);
+        Assert.Contains("No existe el préstamo", result.Error);
+        _loans.Verify(x => x.Update(It.IsAny<Loan>()), Times.Never);
+    }
+
+
+    [Fact]
+    public void ReturnLoan_WhenLoanIsAlreadyReturned_ReturnsError()
+    {
+        _loans.Setup(x => x.GetById(99)).Returns(new Loan
+        {
+            Id = 99,
+            BookId = 1,
+            Status = "Devuelto"
+        });
+
+        var result = CreateService().ReturnLoan(99);
+
+        Assert.Null(result.Loan);
+        Assert.Contains("ya está devuelto", result.Error);
+        _loans.Verify(x => x.Update(It.IsAny<Loan>()), Times.Never);
+    }
+
+
 }
